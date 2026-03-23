@@ -1,0 +1,17 @@
+name: "vector_geometry"
+description: "Exp 4: geometry + activation patching"
+
+key_pairs:
+  - ["v_defer", "neg_refusal_dir"]
+  - ["v_compound", "v_defer"]
+  - ["v_praise", "v_positive"]
+  - ["v_agree", "cond_vec"]
+
+full_matrix:
+  vectors: ["v_agree", "v_praise", "v_defer", "v_compound_w", "v_compound_d",
+            "v_positive", "refusal_dir", "comply_dir", "cond_vec"]
+
+patching:
+  target_vectors: ["v_compound"]
+  critical_layer_strategy: "kl_peak"
+  directions: ["suppress", "induce"]

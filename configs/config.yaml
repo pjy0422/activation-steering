@@ -1,0 +1,20 @@
+defaults:
+  - model: llama3_8b
+  - experiment: dose_response
+  - data: default
+  - _self_
+
+seed: 42
+device: "auto"
+
+wandb:
+  project: "sycophancy-refusal-collapse"
+  entity: null
+  tags: ["sycophancy", "refusal", "mechanistic", "dual-type"]
+  mode: "online"  # "disabled" for debug
+
+paths:
+  data_dir: "${hydra:runtime.cwd}/data"
+  vector_dir: "${paths.data_dir}/vectors/${model.short_name}"
+  results_dir: "${paths.data_dir}/results/${experiment.name}/${model.short_name}"
+  figures_dir: "${hydra:runtime.cwd}/figures"

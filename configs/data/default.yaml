@@ -1,0 +1,11 @@
+n_agree_pairs: 200
+n_praise_pairs: 200
+n_defer_pairs: 200
+n_compound_pairs: 200
+n_positive_pairs: 100
+n_compliance_pairs: 200
+n_harmful: 200
+n_harmless: 200
+n_eval_harmful: 200
+n_eval_harmless: 200
+n_mmlu: 100

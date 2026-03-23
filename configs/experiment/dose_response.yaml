@@ -1,0 +1,17 @@
+name: "dose_response"
+description: "Exp 1: Method A unconditional 5-vector dose-response"
+
+steering:
+  vector_types: ["agree", "praise", "defer", "compound", "positive"]
+  alphas: [0, 1, 3, 5, 8, 12, 15]
+  steer_layer_strategy: "late_half"
+  token_position: -1
+
+measurement:
+  metrics: ["cond_sim", "ref_proj", "comp_proj", "policy_score", "refusal_margin"]
+  save_per_prompt: true
+
+eval:
+  n_harmful: 200
+  n_harmless: 200
+  compute_refusal_rate: true

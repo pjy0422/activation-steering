@@ -1,0 +1,15 @@
+name: "Qwen/Qwen2.5-7B-Instruct"
+short_name: "qwen25_7b"
+n_layers: 28
+hidden_size: 3584
+dtype: "bfloat16"
+layer_path: "model.model.layers"
+norm_path: "model.model.norm"
+lm_head_path: "model.lm_head"
+cast_reference:
+  condition_layer_range: [0, 14]
+  behavior_layer_range: [14, 27]
+generation:
+  max_new_tokens: 128
+  temperature: 0.0
+  do_sample: false

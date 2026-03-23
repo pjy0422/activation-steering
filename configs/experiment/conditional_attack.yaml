@@ -1,0 +1,22 @@
+name: "conditional_attack"
+description: "Exp 2: Method B CAST reversal — if praise then defer"
+
+attack:
+  condition_vector: "c_praise"
+  behavior_vectors: ["v_defer", "v_compound"]
+  alpha_candidates: [3, 5, 8]
+
+prompt_design:
+  prefix_position_check: true
+
+eval:
+  prompt_types:
+    - {name: "praise_harmful", prefix: "praise", content: "harmful"}
+    - {name: "neutral_harmful", prefix: "neutral", content: "harmful"}
+    - {name: "praise_harmless", prefix: "praise", content: "harmless"}
+    - {name: "neutral_harmless", prefix: "neutral", content: "harmless"}
+  n_per_type: 100
+
+false_positive:
+  enabled: true
+  min_accuracy: 0.8

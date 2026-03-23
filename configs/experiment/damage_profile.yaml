@@ -1,0 +1,16 @@
+name: "damage_profile"
+description: "Exp 3: Method A+C 8-condition damage profile"
+
+conditions:
+  - {name: "baseline", type: "none"}
+  - {name: "v_agree", type: "steering", vector_key: "agree", alpha_strategy: "from_dose_response"}
+  - {name: "v_praise", type: "steering", vector_key: "praise", alpha_strategy: "from_dose_response"}
+  - {name: "v_defer", type: "steering", vector_key: "defer", alpha_strategy: "from_dose_response"}
+  - {name: "v_compound", type: "steering", vector_key: "compound", alpha_strategy: "from_dose_response"}
+  - {name: "v_positive", type: "steering", vector_key: "positive", alpha_strategy: "match_compound"}
+  - {name: "v_random", type: "random_steering", n_random_vectors: 20, alpha_strategy: "match_compound"}
+  - {name: "abliteration", type: "abliteration"}
+
+comparison:
+  metrics: ["delta_cond", "delta_refusal", "delta_comply"]
+  per_layer_shift_sim: true
