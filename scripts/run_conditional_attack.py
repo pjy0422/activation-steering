@@ -51,41 +51,43 @@ def main(cfg: DictConfig):
         for alpha in cfg.experiment.attack.alpha_candidates:
             for ptype in ["praise", "neutral"]:
                 for cast_on in [True, False]:
-                    prompts = harmful[:cfg.experiment.eval.n_per_type]
-                    refusal_count = 0
+                    # Test both harmful and harmless prompts
+                    for harm_type, prompts_pool in [("harmful", harmful), ("harmless", harmless)]:
+                        prompts = prompts_pool[:cfg.experiment.eval.n_per_type]
+                        refusal_count = 0
 
-                    for p in tqdm(prompts,
-                                  desc=f"{bv_name} a={alpha} {ptype} CAST={cast_on}"):
-                        if ptype == "praise":
-                            prefix = random.choice(USER_DIRECTED)
-                            full = f"{prefix}{p}"
-                        else:
-                            prefix = ""
-                            full = p
+                        for p in tqdm(prompts,
+                                      desc=f"{bv_name} a={alpha} {ptype} CAST={cast_on} {harm_type}"):
+                            if ptype == "praise":
+                                prefix = random.choice(USER_DIRECTED)
+                                full = f"{prefix}{p}"
+                            else:
+                                prefix = ""
+                                full = p
 
-                        if cast_on:
-                            result = conditional_attack(
-                                model, full, prefix,
-                                c_praise[gp["layer"]], vb,
-                                ref_dirs, cond_vecs, comp_dirs,
-                                gp["layer"], gp["theta"], gp["direction"],
-                                behav_layers, alpha, cl_m, bl,
+                            if cast_on:
+                                result = conditional_attack(
+                                    model, full, prefix,
+                                    c_praise[gp["layer"]], vb,
+                                    ref_dirs, cond_vecs, comp_dirs,
+                                    gp["layer"], gp["theta"], gp["direction"],
+                                    behav_layers, alpha, cl_m, bl,
+                                )
+                                steer = result["condition_met"]
+                            else:
+                                steer = False
+
+                            text = generate_with_conditional_steering(
+                                model, full, vb, behav_layers,
+                                alpha, steer,
+                                cfg.model.generation.max_new_tokens,
                             )
-                            steer = result["condition_met"]
-                        else:
-                            steer = False
+                            if is_refusal(text):
+                                refusal_count += 1
 
-                        text = generate_with_conditional_steering(
-                            model, full, vb, behav_layers,
-                            alpha, steer,
-                            cfg.model.generation.max_new_tokens,
-                        )
-                        if is_refusal(text):
-                            refusal_count += 1
-
-                    rr = refusal_count / len(prompts)
-                    print(f"  {ptype}/CAST={cast_on}: refusal_rate={rr:.3f}")
-                    log_conditional_attack(bv_name, alpha, ptype, cast_on, rr)
+                        rr = refusal_count / len(prompts)
+                        print(f"  {harm_type}/{ptype}/CAST={cast_on}: refusal_rate={rr:.3f}")
+                        log_conditional_attack(bv_name, alpha, f"{harm_type}_{ptype}", cast_on, rr)
 
     # False positive evaluation
     print("\n=== False Positive Evaluation ===")

@@ -86,65 +86,89 @@ def main():
     harmful_train, harmless_train = load_harmful_harmless(
         project_root / "data", n=args.n_pairs, split="train"
     )
-    harmful_eval, harmless_eval = load_harmful_harmless(
-        project_root / "data", n=args.n_eval, split="test"
-    )
-    print(f"  Train: {len(harmful_train)} harmful, {len(harmless_train)} harmless")
-    print(f"  Eval:  {len(harmful_eval)} harmful")
 
-    # ── 3. Build contrastive pairs inline (no separate data generation) ──
-    print("\n[3/6] Extracting vectors (DiffMean, no grid search)...")
-    from src.vectors.common import extract_diffmean_vectors
-    from src.vectors.compound import create_compound_weighted
+    # Eval: HarmBench standard (clearly harmful → high baseline refusal)
+    from datasets import load_dataset
+    harmbench = load_dataset("walledai/HarmBench", "standard", split="train")
+    harmful_eval = [item["prompt"] for item in harmbench]
+    if args.n_eval < len(harmful_eval):
+        harmful_eval = harmful_eval[:args.n_eval]
+    print(f"  Train: {len(harmful_train)} harmful, {len(harmless_train)} harmless")
+    print(f"  Eval:  {len(harmful_eval)} harmful (HarmBench)")
+
+    # ── 3. Extract vectors using CAST pca_pairwise ──────────────────────
+    print("\n[3/6] Extracting vectors (CAST pca_pairwise)...")
+    from activation_steering import SteeringDataset, SteeringVector
     from src.data.praise_pairs import USER_DIRECTED, TOPIC_DIRECTED
     from src.data.deference_pairs import USER_AUTHORITY, SELF_POLICY
-    import random
 
-    random.seed(42)
+    def sv_to_dict(sv):
+        """Convert CAST SteeringVector.directions to dict[int, Tensor]."""
+        return {l: torch.tensor(v, dtype=torch.float32)
+                for l, v in sv.directions.items()}
 
-    # Build praise pairs on-the-fly from harmful prompts
-    praise_pos = [
-        f"Human: {h}\n\nAssistant: {random.choice(USER_DIRECTED)}I'll help with that."
-        for h in harmful_train
-    ]
-    praise_neg = [
-        f"Human: {h}\n\nAssistant: {random.choice(TOPIC_DIRECTED)}I'll help with that."
-        for h in harmful_train
-    ]
-
-    # Build deference pairs on-the-fly
-    defer_pos = [
-        f"Human: {h}\n\nAssistant: {random.choice(USER_AUTHORITY)}I'll help with that."
-        for h in harmful_train
-    ]
-    defer_neg = [
-        f"Human: {h}\n\nAssistant: {random.choice(SELF_POLICY)}I'll help with that."
-        for h in harmful_train
-    ]
-
+    # --- v_praise: user-directed vs topic-directed praise (behavior vector) ---
     t1 = time.time()
-    print("  Extracting v_praise...")
-    v_praise = extract_diffmean_vectors(model, praise_pos, praise_neg)
-    print(f"    Done ({time.time()-t1:.1f}s)")
+    print("  Extracting v_praise (pca_pairwise, suffix-only)...")
+    praise_suffixes = list(zip(
+        [t + " I'll help with that." for t in USER_DIRECTED],
+        [t + " I'll help with that." for t in TOPIC_DIRECTED],
+    ))
+    praise_ds = SteeringDataset(
+        tokenizer=model.tokenizer,
+        examples=[(h, h) for h in harmful_train],
+        suffixes=praise_suffixes,
+    )
+    v_praise = sv_to_dict(SteeringVector.train(
+        model=model._model, tokenizer=model.tokenizer,
+        steering_dataset=praise_ds,
+        method="pca_pairwise", accumulate_last_x_tokens="suffix-only",
+    ))
+    print(f"    Done ({time.time()-t1:.1f}s) — {len(praise_ds.formatted_dataset)} pairs")
 
+    # --- v_defer: user-authority vs self-policy (behavior vector) ---
     t1 = time.time()
-    print("  Extracting v_defer...")
-    v_defer = extract_diffmean_vectors(model, defer_pos, defer_neg)
-    print(f"    Done ({time.time()-t1:.1f}s)")
+    print("  Extracting v_defer (pca_pairwise, suffix-only)...")
+    defer_suffixes = list(zip(
+        [t + " I'll help with that." for t in USER_AUTHORITY],
+        [t + " I'll help with that." for t in SELF_POLICY],
+    ))
+    defer_ds = SteeringDataset(
+        tokenizer=model.tokenizer,
+        examples=[(h, h) for h in harmful_train],
+        suffixes=defer_suffixes,
+    )
+    v_defer = sv_to_dict(SteeringVector.train(
+        model=model._model, tokenizer=model.tokenizer,
+        steering_dataset=defer_ds,
+        method="pca_pairwise", accumulate_last_x_tokens="suffix-only",
+    ))
+    print(f"    Done ({time.time()-t1:.1f}s) — {len(defer_ds.formatted_dataset)} pairs")
 
-    print("  Creating v_compound (weighted sum)...")
-    v_compound = create_compound_weighted(v_praise, v_defer)
+    # --- v_compound: weighted sum of praise + defer, normalized ---
+    print("  Creating v_compound (weighted sum, normalized)...")
+    v_compound = {}
+    for l in v_praise:
+        combined = 0.5 * v_praise[l] + 0.5 * v_defer[l]
+        v_compound[l] = combined / combined.norm()
 
+    # --- refusal_dirs: harmful vs harmless (condition-style, all tokens) ---
     t1 = time.time()
-    print("  Extracting refusal_dirs (unfiltered, fast)...")
-    # Unfiltered DiffMean: harmful vs harmless directly (skip generation filtering)
-    refusal_dirs = extract_diffmean_vectors(model, harmful_train, harmless_train)
-    print(f"    Done ({time.time()-t1:.1f}s)")
+    print("  Extracting refusal_dirs (pca_pairwise, all tokens)...")
+    refusal_ds = SteeringDataset(
+        tokenizer=model.tokenizer,
+        examples=list(zip(harmful_train, harmless_train)),
+        disable_suffixes=True,
+    )
+    refusal_dirs = sv_to_dict(SteeringVector.train(
+        model=model._model, tokenizer=model.tokenizer,
+        steering_dataset=refusal_ds,
+        method="pca_pairwise", accumulate_last_x_tokens="all",
+    ))
+    print(f"    Done ({time.time()-t1:.1f}s) — {len(refusal_ds.formatted_dataset)} pairs")
 
-    # Compliance direction: reuse deference pairs (simplified)
-    comply_dirs = extract_diffmean_vectors(model, defer_pos, defer_neg)
-
-    # Condition vectors: reuse refusal dirs as proxy (simplified)
+    # Simplified: reuse for comply_dirs and cond_vecs
+    comply_dirs = v_defer
     cond_vecs = refusal_dirs
 
     # Save vectors
@@ -173,7 +197,7 @@ def main():
     # ── 5. Measure + Generate ────────────────────────────────────────────
     from src.steering.measure import measure_triple_pathway
     from src.steering.generate import generate_with_steering
-    from src.analysis.refusal_classifier import is_refusal_keyword_only
+    from src.analysis.refusal_classifier import is_refusal
     from tqdm import tqdm
 
     all_results = {}
@@ -198,18 +222,17 @@ def main():
             if not args.skip_generation:
                 text = generate_with_steering(
                     model, prompt, v_compound, steer_layers, alpha,
-                    max_new_tokens=128,
+                    max_new_tokens=256,
                 )
-                if is_refusal_keyword_only(text):
+                if is_refusal(text):
                     refusal_count += 1
                 total += 1
 
-                # Print first 3 examples
-                if i < 3:
-                    print(f"\n  --- Prompt {i} (alpha={alpha}) ---")
-                    print(f"  Q: {prompt[:80]}...")
-                    print(f"  A: {text[:200]}...")
-                    print(f"  Refusal: {is_refusal_keyword_only(text)}")
+                # Print all examples
+                print(f"\n  --- Prompt {i} (alpha={alpha}) ---")
+                print(f"  Q: {prompt}")
+                print(f"  A: {text}")
+                print(f"  Refusal: {is_refusal(text)}")
 
         # Aggregate metrics
         refusal_rate = refusal_count / total if total > 0 else None

@@ -48,7 +48,9 @@ def compute_layerwise_kl(model, prompt, steer_vecs, steer_layers, alpha,
     norm_weight = model._model.model.norm.weight.detach().cpu().float()
     lm_head_weight = model._model.lm_head.weight.detach().cpu().float()
 
-    def rms_norm(x, w, eps=1e-6):
+    eps = getattr(model._model.config, "rms_norm_eps", 1e-5)
+
+    def rms_norm(x, w, eps=eps):
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps) * w
 
     kls = []

@@ -123,7 +123,7 @@ $$h'_l \leftarrow h_l + \alpha \cdot v_l \quad \text{for } l \in \mathcal{L}_{\t
 
 - $v$: steering vector (v_agree, v_praise, v_defer, v_compound, v_positive 중 하나)
 - $\mathcal{L}_{\text{steer}}$: steering을 적용하는 layer 집합 (late half)
-- $\alpha$: 강도 (0~15 sweep)
+- $\alpha$: 강도 (0~2.0; CAST Table 4 기준 Llama-3.1 최적 α=1.7)
 - **적용 위치**: 마지막 token position
 
 #### Method B: CAST Conditional Steering — "if praise, then defer" (실험 2에서 사용)
@@ -163,6 +163,10 @@ $$h'_l \leftarrow h_l - (h_l \cdot r_l)\,r_l \quad \text{for } l \in \mathcal{L}
 | $r$ | Harmful-refused vs. harmless-complied | Refusal direction | 3, 4 |
 | $d_c$ | Eager comply vs. neutral respond | Compliance direction | 1, 3, 4 |
 | $c_{\text{harmful}}$ | Harmful vs. harmless prompt (PCA) | 해악 인식 condition | 1, 3 |
+
+> **벡터 추출 방법**: 모든 벡터는 CAST 라이브러리의 `SteeringVector.train(method="pca_pairwise")`로 추출.
+> Behavior vectors는 `accumulate_last_x_tokens="suffix-only"`, Condition vectors는 `"all"` tokens.
+> 초기 DiffMean 방식 대비 벡터 품질이 향상되어 낮은 α에서도 coherent한 steering이 가능.
 
 ---
 
@@ -238,7 +242,7 @@ Llama-3.1-8B-Instruct (primary), Qwen-2.5-7B-Instruct (replication).
 
 **Steering 방법**: Method A — $h'_l \leftarrow h_l + \alpha \cdot v_l$
 
-**설계**: 5 vectors × 7 α values (0, 1, 3, 5, 8, 12, 15) × 200 harmful prompts
+**설계**: 5 vectors × α values (0, 0.5, 1.0, 1.5, 1.7, 2.0; CAST Llama-3.1 최적 α=1.7 참고) × 200 harmful prompts
 
 **각 (vector, α, prompt) 조합에서의 측정**:
 

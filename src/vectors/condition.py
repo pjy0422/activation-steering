@@ -27,37 +27,33 @@ def extract_cast_condition_vectors(model, pos_prompts, neg_prompts, save_path=No
         Dict[int, Tensor] — per-layer normalized condition vector.
     """
     n_layers = model._model.config.num_hidden_layers
+
+    # Collect all layers in ONE trace per prompt (instead of one trace per layer)
+    # This reduces forward passes from n_prompts * n_layers to n_prompts
+    def collect_all_layers(prompts):
+        """Returns dict[layer] -> list of per-prompt full-token-average tensors."""
+        per_layer = {l: [] for l in range(n_layers)}
+        for p in prompts:
+            saved = {}
+            with model.trace(p):
+                for l in range(n_layers):
+                    saved[l] = model.model.layers[l].output.save()
+            for l in range(n_layers):
+                raw_out = saved[l]
+                h = raw_out[0] if isinstance(raw_out, tuple) else raw_out
+                h = h.detach().cpu().float().mean(dim=-2)
+                if h.ndim > 1:
+                    h = h.squeeze(0)
+                per_layer[l].append(h)
+        return per_layer
+
+    pos_per_layer = collect_all_layers(pos_prompts)
+    neg_per_layer = collect_all_layers(neg_prompts)
+
     cond_vecs = {}
-
     for l in range(n_layers):
-        pos_h = []
-        neg_h = []
-
-        # Collect full-token-average hidden states for positive prompts
-        for p in pos_prompts:
-            with model.trace(p):
-                raw_out = model.model.layers[l].output.save()
-            # Unwrap tuple if needed, then average over seq dim
-            h = raw_out[0] if isinstance(raw_out, tuple) else raw_out
-            # Use dim=-2 to always average over sequence dimension
-            # regardless of whether shape is (batch, seq, hidden) or (seq, hidden)
-            h = h.detach().cpu().float().mean(dim=-2)
-            if h.ndim > 1:
-                h = h.squeeze(0)
-            pos_h.append(h)
-
-        # Collect for negative prompts
-        for p in neg_prompts:
-            with model.trace(p):
-                raw_out = model.model.layers[l].output.save()
-            h = raw_out[0] if isinstance(raw_out, tuple) else raw_out
-            h = h.detach().cpu().float().mean(dim=-2)
-            if h.ndim > 1:
-                h = h.squeeze(0)
-            neg_h.append(h)
-
-        pos_t = torch.stack(pos_h)  # (n_pos, hidden_size)
-        neg_t = torch.stack(neg_h)  # (n_neg, hidden_size)
+        pos_t = torch.stack(pos_per_layer[l])  # (n_pos, hidden_size)
+        neg_t = torch.stack(neg_per_layer[l])  # (n_neg, hidden_size)
 
         # Mean-center
         mu = (pos_t.mean(0) + neg_t.mean(0)) / 2

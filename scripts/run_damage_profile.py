@@ -60,11 +60,12 @@ def main(cfg: DictConfig):
     print(f"Alpha*: {alpha_star}")
 
     results = {}
+    baseline_metrics = None
 
     for condition in cfg.experiment.conditions:
         name = condition.name
         print(f"\n=== Condition: {name} ===")
-        deltas = {"cond": [], "ref": [], "comp": []}
+        raw_vals = {"cond": [], "ref": [], "comp": []}
 
         for p in tqdm(harmful, desc=name):
             if condition.type == "none":
@@ -105,21 +106,26 @@ def main(cfg: DictConfig):
             else:
                 continue
 
-            # Compute deltas vs. baseline (baseline is first condition)
-            if name == "baseline":
-                deltas["cond"].append(r["cond_sim"])
-                deltas["ref"].append(r["ref_proj"])
-                deltas["comp"].append(r["comp_proj"])
-            else:
-                deltas["cond"].append(r["cond_sim"])
-                deltas["ref"].append(r["ref_proj"])
-                deltas["comp"].append(r["comp_proj"])
+            raw_vals["cond"].append(r["cond_sim"])
+            raw_vals["ref"].append(r["ref_proj"])
+            raw_vals["comp"].append(r["comp_proj"])
 
         metrics = {
-            "mean_cond_sim": float(np.mean(deltas["cond"])),
-            "mean_ref_proj": float(np.mean(deltas["ref"])),
-            "mean_comp_proj": float(np.mean(deltas["comp"])),
+            "mean_cond_sim": float(np.mean(raw_vals["cond"])),
+            "mean_ref_proj": float(np.mean(raw_vals["ref"])),
+            "mean_comp_proj": float(np.mean(raw_vals["comp"])),
         }
+
+        # Store baseline for delta computation
+        if name == "baseline":
+            baseline_metrics = metrics
+
+        # Compute deltas vs baseline
+        if baseline_metrics is not None:
+            metrics["delta_cond_sim"] = metrics["mean_cond_sim"] - baseline_metrics["mean_cond_sim"]
+            metrics["delta_ref_proj"] = metrics["mean_ref_proj"] - baseline_metrics["mean_ref_proj"]
+            metrics["delta_comp_proj"] = metrics["mean_comp_proj"] - baseline_metrics["mean_comp_proj"]
+
         results[name] = metrics
         log_damage_profile(name, metrics)
         print(f"  {name}: {metrics}")

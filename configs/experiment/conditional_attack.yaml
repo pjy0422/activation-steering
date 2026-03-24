@@ -4,7 +4,7 @@ description: "Exp 2: Method B CAST reversal — if praise then defer"
 attack:
   condition_vector: "c_praise"
   behavior_vectors: ["v_defer", "v_compound"]
-  alpha_candidates: [3, 5, 8]
+  alpha_candidates: [0.5, 1.0, 1.7]
 
 prompt_design:
   prefix_position_check: true

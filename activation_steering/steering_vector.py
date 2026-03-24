@@ -307,7 +307,7 @@ def batched_get_hiddens(model, tokenizer, inputs: list[str], hidden_layer_ids: l
                     else:
                         accumulated_hidden_state = torch.mean(batch_hidden[-accumulate_last_x_tokens:, :], dim=0)
                     
-                    hidden_states[layer_id].append(accumulated_hidden_state.squeeze().cpu().numpy())
+                    hidden_states[layer_id].append(accumulated_hidden_state.squeeze().cpu().float().numpy())
             
             
             # Delete the model output to free up memory

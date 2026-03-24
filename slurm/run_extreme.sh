@@ -33,6 +33,6 @@ python scripts/run_extreme.py \
     --model meta-llama/Llama-3.1-8B-Instruct \
     --n_pairs 50 \
     --n_eval 50 \
-    --alphas 0 0.5 1 1.5 2 2.5 3 4
+    --alphas 0 1.0 1.7 2.0
 
 echo "===== Extreme run complete ====="

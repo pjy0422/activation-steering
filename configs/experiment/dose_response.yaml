@@ -3,7 +3,7 @@ description: "Exp 1: Method A unconditional 5-vector dose-response"
 
 steering:
   vector_types: ["agree", "praise", "defer", "compound", "positive"]
-  alphas: [0, 1, 3, 5, 8, 12, 15]
+  alphas: [0, 0.5, 1.0, 1.5, 1.7, 2.0]
   steer_layer_strategy: "late_half"
   token_position: -1
 
